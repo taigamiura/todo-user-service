@@ -26,8 +26,16 @@ on:
       - bun.lock
       - tsconfig.json
 
+permissions:
+  contents: read
+
+concurrency:
+  group: user-service-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  unit-coverage:
+  quality:
+    timeout-minutes: 10
     runs-on: ubuntu-latest
 
     env:
@@ -42,10 +50,15 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Install coverage tooling
-        run: sudo apt-get update && sudo apt-get install -y lcov
+      - name: Restore dependency cache
+        id: dependency-cache
+        uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock') }}
 
       - name: Install dependencies
+        if: steps.dependency-cache.outputs.cache-hit != 'true'
         run: bun install --frozen-lockfile
 
       - name: Lint
@@ -56,6 +69,37 @@ jobs:
 
       - name: Build
         run: bun run build
+
+  coverage:
+    needs: quality
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+
+    env:
+      BUN_VERSION: 1.3.13
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Restore dependency cache
+        id: dependency-cache
+        uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock') }}
+
+      - name: Install coverage tooling
+        run: sudo apt-get update && sudo apt-get install -y lcov
+
+      - name: Install dependencies
+        if: steps.dependency-cache.outputs.cache-hit != 'true'
+        run: bun install --frozen-lockfile
 
       - name: Run unit test coverage and enforce threshold
         run: bun run test:coverage:unit:ci

@@ -95,7 +95,7 @@ describe("users validators のユニットテスト", () => {
 			body: JSON.stringify({ username: "new_user" }),
 		});
 
-		await expect(parseJsonBody(request)).resolves.toEqual({
+		expect(parseJsonBody(request)).resolves.toEqual({
 			username: "new_user",
 		});
 	});
@@ -107,8 +107,8 @@ describe("users validators のユニットテスト", () => {
 			body: '{"username":',
 		});
 
-		await expect(parseJsonBody(request)).rejects.toThrow(BadRequestError);
-		await expect(parseJsonBody(request.clone())).rejects.toThrow(
+		expect(parseJsonBody(request)).rejects.toThrow(BadRequestError);
+		expect(parseJsonBody(request.clone())).rejects.toThrow(
 			"Request body must be valid JSON",
 		);
 	});

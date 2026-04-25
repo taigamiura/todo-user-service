@@ -1,113 +1,50 @@
-To install dependencies:
-```sh
-bun install
-```
+# Architecture Overview
 
-This service expects Bun 1.3.13 in local development, CI, and Docker.
+本システムは、フロントエンドが直接各マイクロサービスを呼び出すのではなく、BFF を経由して user-service と todo-service を利用する構成とする。
 
-Create a local environment file:
-```sh
-cp .env.example .env
-```
+user-service と todo-service は外部公開せず、ネットワーク的にも BFF 経由のみでアクセス可能とする。サービス間通信は mTLS を利用する。
 
-To run:
-```sh
-bun run dev
-```
+## BFF Responsibilities
 
-open http://localhost:3000
+- 認証の入口を担当する
+- フロントエンド向けの認可を担当する
+- CORS を担当する
+- API 集約を担当する
+- フロントエンド向けのレスポンス変換を担当する
+- request context を生成し、下流サービスへ伝搬する
+- 下流サービス呼び出し時の timeout を制御する
+- 下流サービス障害時はフォールバックせず、エラーとして返す
 
-To run unit tests:
-```sh
-bun test tests/unit/*.test.ts
-```
+## Service Responsibilities
 
-or:
-```sh
-bun run test:unit
-```
+user-service と todo-service は以下を担当する。
 
-To run all tests:
-```sh
-bun test tests/**/*.test.ts
-```
+- 入力バリデーション
+- ドメインバリデーション
+- リソース単位の認可
+- BFF からの内部呼び出しの真正性確認
+- end user context を使った最終認可
+- 構造化ログと監査ログの出力
+- readiness / liveness エンドポイントの提供
 
-To typecheck the service:
-```sh
-bun run typecheck
-```
+CORS はブラウザから直接アクセスされない前提のため、各サービスでは通常不要とする。
 
-To run lint:
-```sh
-bun run lint
-```
+## Request Context and Tracing
 
-To auto-fix lint and formatting issues locally:
-```sh
-bun run lint:fix
-```
+- requestID は BFF が生成し、user-service と todo-service へ伝搬する
+- フロントエンドが独自の requestID を送る場合でも、それを正規の内部 requestID としては扱わず、必要に応じて補助情報として記録する
+- 将来的な分散トレーシングに備えて、trace context を扱える構成を前提とする
 
-To verify the production build output:
-```sh
-bun run build
-```
+## Authorization Model
 
-To generate a coverage report:
-```sh
-bun run test:coverage
-```
+- 認証は BFF が主担当とするが、認可は BFF だけで完結させない
+- BFF は画面・機能単位の認可を行い、user-service / todo-service は各リソースに対する最終認可を行う
 
-To generate unit-only coverage with mock-based tests:
-```sh
-bun run test:coverage:unit
-```
+## Operational Policy
 
-To fail when line coverage drops below the CI threshold:
-```sh
-bun run coverage:check
-```
-
-To generate browser-viewable HTML coverage:
-```sh
-bun run test:coverage:html
-```
-
-To generate browser-viewable HTML coverage for unit tests only:
-```sh
-bun run test:coverage:unit:html
-```
-
-To generate and open HTML coverage in the browser on macOS:
-```sh
-bun run test:coverage:open
-```
-
-GitHub Actions also runs mock-based unit coverage and uploads these artifacts on push and pull request changes under `user-service/` or the workflow file itself:
-```text
-user-service-unit-coverage-html
-user-service-unit-coverage-lcov
-```
-
-CI also runs `bun run typecheck` and `bun run build` before coverage. Typecheck catches TypeScript contract drift, and build catches packaging or entrypoint regressions that tests may not exercise.
-
-After coverage is generated, CI runs a threshold check against `coverage/lcov.info`. The current gate requires 90% line coverage for the mock-based unit test suite.
-
-On GitHub Actions, the same coverage check also writes a Coverage Summary into the workflow summary so you can see the percentage directly from the run without downloading the artifact first.
-
-Use the HTML artifact when you want to inspect uncovered files and lines in a browser without regenerating coverage locally. This CI workflow is mock-based and does not start PostgreSQL.
-
-If `user-service` is managed as its own Git repository, the same CI workflow also exists at `.github/workflows/ci.yml` inside `user-service` so GitHub Actions can run from that repository root as well.
-
-If `genhtml` is not installed:
-```sh
-brew install lcov
-```
-
-User API endpoints:
-```sh
-GET    /users
-GET    /users/:id
-POST   /users
-PUT    /users/:id
-DELETE /users/:id
-```
+- user-service と todo-service は外部公開しない
+- timeout は導入するが、値は SLO と実測レイテンシに基づいて調整する
+- リトライは初期段階では導入しない
+- サーキットブレーカーは初期段階では導入しない
+- 監査ログは通常ログと分けて管理する
+- NetworkPolicy により BFF から各サービスへの通信のみを許可する

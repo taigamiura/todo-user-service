@@ -34,37 +34,37 @@ const createMockUserRepository = (
 });
 
 describe("user-service のユニットテスト", () => {
-	it("listUsers は通常の一覧取得でリポジトリ結果を返す", async () => {
+	it("listUsers は通常の一覧取得でリポジトリ結果を返す", () => {
 		const service = createUserService(createMockUserRepository());
 
-		await expect(service.listUsers()).resolves.toEqual([sampleUser]);
+		expect(service.listUsers()).resolves.toEqual([sampleUser]);
 	});
 
-	it("getUserById は存在するユーザーを返す", async () => {
+	it("getUserById は存在するユーザーを返す", () => {
 		const service = createUserService(createMockUserRepository());
 
-		await expect(service.getUserById(10)).resolves.toEqual({
+		expect(service.getUserById(10)).resolves.toEqual({
 			id: 10,
 			username: "john_doe",
 			email: "john@example.com",
 		});
 	});
 
-	it("getUserById は削除済みまたは未知のユーザーに not found を投げる", async () => {
+	it("getUserById は削除済みまたは未知のユーザーに not found を投げる", () => {
 		const service = createUserService(
 			createMockUserRepository({
 				findUserById: async () => null,
 			}),
 		);
 
-		await expect(service.getUserById(999)).rejects.toThrow(NotFoundError);
-		await expect(service.getUserById(999)).rejects.toThrow("User not found");
+		expect(service.getUserById(999)).rejects.toThrow(NotFoundError);
+		expect(service.getUserById(999)).rejects.toThrow("User not found");
 	});
 
-	it("createUser はユーザー作成をリポジトリに委譲する", async () => {
+	it("createUser はユーザー作成をリポジトリに委譲する", () => {
 		const service = createUserService(createMockUserRepository());
 
-		await expect(
+		expect(
 			service.createUser({
 				username: "new_user",
 				email: "new@example.com",
@@ -77,10 +77,10 @@ describe("user-service のユニットテスト", () => {
 		});
 	});
 
-	it("updateUser は対象レコードが存在するとき更新後のユーザーを返す", async () => {
+	it("updateUser は対象レコードが存在するとき更新後のユーザーを返す", () => {
 		const service = createUserService(createMockUserRepository());
 
-		await expect(
+		expect(
 			service.updateUser(5, {
 				username: "updated_user",
 				email: "updated@example.com",
@@ -93,14 +93,14 @@ describe("user-service のユニットテスト", () => {
 		});
 	});
 
-	it("updateUser は存在しないユーザー更新時に not found を投げる", async () => {
+	it("updateUser は存在しないユーザー更新時に not found を投げる", () => {
 		const service = createUserService(
 			createMockUserRepository({
 				updateUser: async () => null,
 			}),
 		);
 
-		await expect(
+		expect(
 			service.updateUser(404, {
 				username: "missing_user",
 				email: "missing@example.com",
@@ -109,20 +109,20 @@ describe("user-service のユニットテスト", () => {
 		).rejects.toThrow(NotFoundError);
 	});
 
-	it("deleteUser はリポジトリで削除できたとき正常終了する", async () => {
+	it("deleteUser はリポジトリで削除できたとき正常終了する", () => {
 		const service = createUserService(createMockUserRepository());
 
-		await expect(service.deleteUser(7)).resolves.toBeUndefined();
+		expect(service.deleteUser(7)).resolves.toBeUndefined();
 	});
 
-	it("deleteUser は既に削除済みのユーザーに not found を投げる", async () => {
+	it("deleteUser は既に削除済みのユーザーに not found を投げる", () => {
 		const service = createUserService(
 			createMockUserRepository({
 				deleteUser: async () => false,
 			}),
 		);
 
-		await expect(service.deleteUser(404)).rejects.toThrow(NotFoundError);
-		await expect(service.deleteUser(404)).rejects.toThrow("User not found");
+		expect(service.deleteUser(404)).rejects.toThrow(NotFoundError);
+		expect(service.deleteUser(404)).rejects.toThrow("User not found");
 	});
 });

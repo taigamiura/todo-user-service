@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { createApp } from "../../src/app";
 import {
 	ConflictError,
@@ -41,14 +41,24 @@ const createMockUserService = (
 	...overrides,
 });
 
+afterEach(() => {
+	mock.restore();
+});
+
 describe("User Service のユニットテスト", () => {
-	it("GET / はルートエンドポイントのヘルスチェック文字列を返す", async () => {
+	it("GET /health は healthcheck を共通レスポンス形式で返す", async () => {
 		const app = createApp(createMockUserService());
 
-		const res = await app.request("/");
+		const res = await app.request("/health");
+		const body = await res.json();
 
 		expect(res.status).toBe(200);
-		expect(await res.text()).toBe("Hello Hono!");
+		expect(body).toEqual({
+			success: true,
+			data: {
+				status: "ok",
+			},
+		});
 	});
 
 	it("GET /users は 200 とユーザー一覧を返す", async () => {
@@ -58,7 +68,10 @@ describe("User Service のユニットテスト", () => {
 		const body = await res.json();
 
 		expect(res.status).toBe(200);
-		expect(body).toEqual([sampleUser]);
+		expect(body).toEqual({
+			success: true,
+			data: [sampleUser],
+		});
 	});
 
 	it("GET /users/:id はモックされたリポジトリデータで 200 を返す", async () => {
@@ -69,9 +82,12 @@ describe("User Service のユニットテスト", () => {
 
 		expect(res.status).toBe(200);
 		expect(body).toEqual({
-			id: 123,
-			username: "mock_user",
-			email: "mock@example.com",
+			success: true,
+			data: {
+				id: 123,
+				username: "mock_user",
+				email: "mock@example.com",
+			},
 		});
 	});
 
@@ -82,7 +98,13 @@ describe("User Service のユニットテスト", () => {
 		const body = await res.json();
 
 		expect(res.status).toBe(400);
-		expect(body).toEqual({ message: "User id must be a positive integer" });
+		expect(body).toEqual({
+			success: false,
+			error: {
+				code: "BAD_REQUEST",
+				message: "User id must be a positive integer",
+			},
+		});
 	});
 
 	it("GET /users/:id はリポジトリ側で未検出なら 404 を返す", async () => {
@@ -98,7 +120,13 @@ describe("User Service のユニットテスト", () => {
 		const body = await res.json();
 
 		expect(res.status).toBe(404);
-		expect(body).toEqual({ message: "User not found" });
+		expect(body).toEqual({
+			success: false,
+			error: {
+				code: "NOT_FOUND",
+				message: "User not found",
+			},
+		});
 	});
 
 	it("POST /users はペイロードが有効なとき 201 を返す", async () => {
@@ -117,9 +145,12 @@ describe("User Service のユニットテスト", () => {
 
 		expect(res.status).toBe(201);
 		expect(body).toEqual({
-			id: 2,
-			username: "new_user",
-			email: "new@example.com",
+			success: true,
+			data: {
+				id: 2,
+				username: "new_user",
+				email: "new@example.com",
+			},
 		});
 	});
 
@@ -138,7 +169,13 @@ describe("User Service のユニットテスト", () => {
 		const body = await res.json();
 
 		expect(res.status).toBe(422);
-		expect(body).toEqual({ message: "username is required" });
+		expect(body).toEqual({
+			success: false,
+			error: {
+				code: "UNPROCESSABLE_ENTITY",
+				message: "username is required",
+			},
+		});
 	});
 
 	it("POST /users は重複検知時に 409 を返す", async () => {
@@ -162,7 +199,13 @@ describe("User Service のユニットテスト", () => {
 		const body = await res.json();
 
 		expect(res.status).toBe(409);
-		expect(body).toEqual({ message: "User already exists" });
+		expect(body).toEqual({
+			success: false,
+			error: {
+				code: "CONFLICT",
+				message: "User already exists",
+			},
+		});
 	});
 
 	it("PUT /users/:id はユーザーが存在するとき 200 を返す", async () => {
@@ -181,20 +224,28 @@ describe("User Service のユニットテスト", () => {
 
 		expect(res.status).toBe(200);
 		expect(body).toEqual({
-			id: 3,
-			username: "updated_user",
-			email: "updated@example.com",
+			success: true,
+			data: {
+				id: 3,
+				username: "updated_user",
+				email: "updated@example.com",
+			},
 		});
 	});
 
-	it("DELETE /users/:id はユーザーが存在するとき 204 を返す", async () => {
+	it("DELETE /users/:id はユーザーが存在するとき共通レスポンス形式で返す", async () => {
 		const app = createApp(createMockUserService());
 
 		const res = await app.request("/users/3", {
 			method: "DELETE",
 		});
+		const body = await res.json();
 
-		expect(res.status).toBe(204);
+		expect(res.status).toBe(200);
+		expect(body).toEqual({
+			success: true,
+			data: { deleted: true },
+		});
 	});
 
 	it("GET /users はデータベース利用不可時に 503 を返す", async () => {
@@ -210,16 +261,92 @@ describe("User Service のユニットテスト", () => {
 		const body = await res.json();
 
 		expect(res.status).toBe(503);
-		expect(body).toEqual({ message: "Database is unavailable" });
+		expect(body).toEqual({
+			success: false,
+			error: {
+				code: "SERVICE_UNAVAILABLE",
+				message: "Database is unavailable",
+			},
+		});
 	});
 
-	it("GET /error は 500 とエラーメッセージの JSON を返す", async () => {
+	it("リクエスト完了時に route pattern とリクエスト値を含む構造化ログを出力する", async () => {
+		const logSpy = spyOn(console, "log").mockImplementation(() => {});
 		const app = createApp(createMockUserService());
 
-		const res = await app.request("/error");
-		const body = await res.json();
+		await app.request("/users/123?include=profile", {
+			headers: {
+				"x-request-id": "req-user-001",
+			},
+		});
 
-		expect(res.status).toBe(500);
-		expect(body).toEqual({ message: "Internal Server Error" });
+		expect(logSpy).toHaveBeenCalledTimes(1);
+
+		const [rawLog] = logSpy.mock.calls[0] as [string];
+		const parsedLog = JSON.parse(rawLog);
+
+		expect(parsedLog.level).toBe("info");
+		expect(parsedLog.requestId).toBe("req-user-001");
+		expect(parsedLog.method).toBe("GET");
+		expect(parsedLog.path).toBeUndefined();
+		expect(parsedLog.routePattern).toBe("/users/:id");
+		expect(parsedLog.params).toEqual({ id: "123" });
+		expect(parsedLog.query).toEqual({ include: "profile" });
+		expect(parsedLog.requestBody).toBeUndefined();
+		expect(parsedLog.status).toBe(200);
+		expect(typeof parsedLog.durationMs).toBe("number");
+	});
+
+	it("params と query は許可リスト外を落としてログに出力する", async () => {
+		const logSpy = spyOn(console, "log").mockImplementation(() => {});
+		const app = createApp(createMockUserService());
+
+		await app.request("/users/123?include=profile&token=secret-token", {
+			headers: {
+				"x-request-id": "req-user-002",
+			},
+		});
+
+		expect(logSpy).toHaveBeenCalledTimes(1);
+
+		const [rawLog] = logSpy.mock.calls[0] as [string];
+		const parsedLog = JSON.parse(rawLog);
+
+		expect(parsedLog.routePattern).toBe("/users/:id");
+		expect(parsedLog.params).toEqual({ id: "123" });
+		expect(parsedLog.query).toEqual({ include: "profile" });
+	});
+
+	it("JSON リクエストの body は許可リストに絞ってマスク付きでログに出力する", async () => {
+		const logSpy = spyOn(console, "log").mockImplementation(() => {});
+		const app = createApp(createMockUserService());
+
+		await app.request("/users", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"x-request-id": "req-user-create-001",
+			},
+			body: JSON.stringify({
+				username: "new_user",
+				email: "new@example.com",
+				password: "password123",
+				ignored: "do-not-log",
+			}),
+		});
+
+		expect(logSpy).toHaveBeenCalledTimes(1);
+
+		const [rawLog] = logSpy.mock.calls[0] as [string];
+		const parsedLog = JSON.parse(rawLog);
+
+		expect(parsedLog.requestId).toBe("req-user-create-001");
+		expect(parsedLog.routePattern).toBe("/users");
+		expect(parsedLog.requestBody).toEqual({
+			username: "new_user",
+			email: "new@example.com",
+			password: "[REDACTED]",
+		});
+		expect(parsedLog.requestBody.ignored).toBeUndefined();
 	});
 });

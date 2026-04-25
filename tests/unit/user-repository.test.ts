@@ -17,7 +17,7 @@ const createSqlMock = (
 };
 
 describe("user-repository のユニットテスト", () => {
-	it("listUsers は整形済みのユーザー一覧を返す", async () => {
+	it("listUsers は整形済みのユーザー一覧を返す", () => {
 		const repository = createUserRepository(
 			createSqlMock(async () => [
 				{ id: 1, username: "john_doe", email: "john@example.com" },
@@ -25,28 +25,24 @@ describe("user-repository のユニットテスト", () => {
 			]),
 		);
 
-		await expect(repository.listUsers()).resolves.toEqual([
+		expect(repository.listUsers()).resolves.toEqual([
 			{ id: 1, username: "john_doe", email: "john@example.com" },
 			{ id: 2, username: "jane_smith", email: "jane@example.com" },
 		]);
 	});
 
-	it("listUsers はデータベース接続が使えないとき 503 を投げる", async () => {
+	it("listUsers はデータベース接続が使えないとき 503 を投げる", () => {
 		const repository = createUserRepository(
 			createSqlMock(async () => {
 				throw { code: "08006" };
 			}),
 		);
 
-		await expect(repository.listUsers()).rejects.toThrow(
-			ServiceUnavailableError,
-		);
-		await expect(repository.listUsers()).rejects.toThrow(
-			"Database is unavailable",
-		);
+		expect(repository.listUsers()).rejects.toThrow(ServiceUnavailableError);
+		expect(repository.listUsers()).rejects.toThrow("Database is unavailable");
 	});
 
-	it("findUserById は整形済みのユーザーを返す", async () => {
+	it("findUserById は整形済みのユーザーを返す", () => {
 		const repository = createUserRepository(
 			createSqlMock(async (query, values) => {
 				expect(query).toContain("where id =");
@@ -56,32 +52,32 @@ describe("user-repository のユニットテスト", () => {
 			}),
 		);
 
-		await expect(repository.findUserById(1)).resolves.toEqual({
+		expect(repository.findUserById(1)).resolves.toEqual({
 			id: 1,
 			username: "john_doe",
 			email: "john@example.com",
 		});
 	});
 
-	it("findUserById は対象ユーザーがいなければ null を返す", async () => {
+	it("findUserById は対象ユーザーがいなければ null を返す", () => {
 		const repository = createUserRepository(createSqlMock(async () => []));
 
-		await expect(repository.findUserById(999)).resolves.toBeNull();
+		expect(repository.findUserById(999)).resolves.toBeNull();
 	});
 
-	it("findUserById は想定外のデータベースエラーを再送出する", async () => {
+	it("findUserById は想定外のデータベースエラーを再送出する", () => {
 		const repository = createUserRepository(
 			createSqlMock(async () => {
 				throw new Error("Unexpected database failure");
 			}),
 		);
 
-		await expect(repository.findUserById(1)).rejects.toThrow(
+		expect(repository.findUserById(1)).rejects.toThrow(
 			"Unexpected database failure",
 		);
 	});
 
-	it("createUser は作成したユーザーを返す", async () => {
+	it("createUser は作成したユーザーを返す", () => {
 		const repository = createUserRepository(
 			createSqlMock(async (query, values) => {
 				expect(query).toContain("insert into users");
@@ -91,7 +87,7 @@ describe("user-repository のユニットテスト", () => {
 			}),
 		);
 
-		await expect(
+		expect(
 			repository.createUser({
 				username: "new_user",
 				email: "new@example.com",
@@ -104,14 +100,14 @@ describe("user-repository のユニットテスト", () => {
 		});
 	});
 
-	it("createUser は username か email の重複時に 409 を投げる", async () => {
+	it("createUser は username か email の重複時に 409 を投げる", () => {
 		const repository = createUserRepository(
 			createSqlMock(async () => {
 				throw { code: "23505" };
 			}),
 		);
 
-		await expect(
+		expect(
 			repository.createUser({
 				username: "john_doe",
 				email: "john@example.com",
@@ -120,7 +116,7 @@ describe("user-repository のユニットテスト", () => {
 		).rejects.toThrow(ConflictError);
 	});
 
-	it("updateUser は更新後のユーザーを返す", async () => {
+	it("updateUser は更新後のユーザーを返す", () => {
 		const repository = createUserRepository(
 			createSqlMock(async (query, values) => {
 				expect(query).toContain("update users");
@@ -137,7 +133,7 @@ describe("user-repository のユニットテスト", () => {
 			}),
 		);
 
-		await expect(
+		expect(
 			repository.updateUser(4, {
 				username: "updated_user",
 				email: "updated@example.com",
@@ -150,10 +146,10 @@ describe("user-repository のユニットテスト", () => {
 		});
 	});
 
-	it("updateUser は対象ユーザーが存在しなければ null を返す", async () => {
+	it("updateUser は対象ユーザーが存在しなければ null を返す", () => {
 		const repository = createUserRepository(createSqlMock(async () => []));
 
-		await expect(
+		expect(
 			repository.updateUser(404, {
 				username: "missing_user",
 				email: "missing@example.com",
@@ -162,14 +158,14 @@ describe("user-repository のユニットテスト", () => {
 		).resolves.toBeNull();
 	});
 
-	it("updateUser はデータベースが利用不可になったとき 503 を投げる", async () => {
+	it("updateUser はデータベースが利用不可になったとき 503 を投げる", () => {
 		const repository = createUserRepository(
 			createSqlMock(async () => {
 				throw { code: "08001" };
 			}),
 		);
 
-		await expect(
+		expect(
 			repository.updateUser(4, {
 				username: "updated_user",
 				email: "updated@example.com",
@@ -178,7 +174,7 @@ describe("user-repository のユニットテスト", () => {
 		).rejects.toThrow(ServiceUnavailableError);
 	});
 
-	it("deleteUser は行を削除できたとき true を返す", async () => {
+	it("deleteUser は行を削除できたとき true を返す", () => {
 		const repository = createUserRepository(
 			createSqlMock(async (query, values) => {
 				expect(query).toContain("delete from users");
@@ -188,24 +184,22 @@ describe("user-repository のユニットテスト", () => {
 			}),
 		);
 
-		await expect(repository.deleteUser(7)).resolves.toBe(true);
+		expect(repository.deleteUser(7)).resolves.toBe(true);
 	});
 
-	it("deleteUser は削除対象がなければ false を返す", async () => {
+	it("deleteUser は削除対象がなければ false を返す", () => {
 		const repository = createUserRepository(createSqlMock(async () => []));
 
-		await expect(repository.deleteUser(999)).resolves.toBe(false);
+		expect(repository.deleteUser(999)).resolves.toBe(false);
 	});
 
-	it("deleteUser はデータベース利用不可時に 503 を投げる", async () => {
+	it("deleteUser はデータベース利用不可時に 503 を投げる", () => {
 		const repository = createUserRepository(
 			createSqlMock(async () => {
 				throw { code: "08003" };
 			}),
 		);
 
-		await expect(repository.deleteUser(8)).rejects.toThrow(
-			ServiceUnavailableError,
-		);
+		expect(repository.deleteUser(8)).rejects.toThrow(ServiceUnavailableError);
 	});
 });
